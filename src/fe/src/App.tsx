@@ -1,31 +1,27 @@
 import { useState, type ChangeEvent } from 'react'
 import Papa from 'papaparse'
 import { Row } from './Row'
-
-interface CsvRow {
-  user_id?: string | number | boolean | null
-  email?: string | number | boolean | null
-  signup_date?: string | number | boolean | null
-  plan_tier?: string | number | boolean | null
-  mrr?: string | number | boolean | null
-  [key: string]: string | number | boolean | null | undefined
-}
+import type { CsvRow } from './types'
 
 function App() {
   const [csvData, setCsvData] = useState<CsvRow[]>([])
+  const [upload, setUpload] = useState(false)
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e?.target?.files?.[0] ?? null
     if (file) {
       Papa.parse<CsvRow>(file, {
         header: true,
-        dynamicTyping: true,
         skipEmptyLines: true,
         complete: (results: Papa.ParseResult<CsvRow>) => {
           setCsvData(results.data)
         }
       })
     }
+  }
+
+  const handleUpload = () => {
+    setUpload(true)
   }
 
   const styles = {
@@ -56,11 +52,11 @@ function App() {
             </thead>
             <tbody>
               {csvData.map((row, index) => (
-                <Row key={index} col={row as any} saveData={false} />
+                <Row key={index} col={row as CsvRow} saveData={upload} />
               ))}
             </tbody>
           </table>
-          <button onClick={() => ''}>Upload</button>
+          <button onClick={handleUpload}>Upload</button>
         </>
       )}
     </div>
