@@ -2,6 +2,7 @@ from pathlib import Path
 from datetime import datetime
 
 from fastapi import Depends, FastAPI, HTTPException, Query
+from pydantic import field_validator
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from .helpers import parse_and_validate_amount
 
@@ -27,6 +28,12 @@ class SubscriptionCreate(SQLModel):
     plan_tier: str
     mrr: float
     is_active: bool
+
+    @field_validator("mrr", mode="before")
+    @classmethod
+    def parse_mrr(cls, v):
+        # Accept amounts like 100, "$150.00", "USD 100"
+        return parse_and_validate_amount(v)
 
 
 sqlite_file_name = "database.db"
@@ -56,18 +63,19 @@ def on_startup():
 @app.post("/api/subscriptions/")
 def create_subscription(subscription: SubscriptionCreate, user: UserCreate, session: Session = Depends(get_session)) -> Subscription:
     # Create User instance
-    user_instance = User(**user.dict())
+    user_instance = session.get(User, user.user_id)
+    if user_instance is None:
+        user_instance = User(**user.dict())
     # Create Subscription instance
     date = subscription.signup_date
     if not isinstance(date, datetime):
         raise HTTPException(status_code=400, detail="Invalid date format")
-    iso_date = date.isoformat()
-    mrr = parse_and_validate_amount(subscription.mrr)
+    mrr = subscription.mrr
     is_active = subscription.is_active
     active = True if is_active in [True, "true", "Y", "YES"] else False
     subscription_instance = Subscription(
         user_id=subscription.user_id,
-        signup_date=iso_date,
+        signup_date=date,
         plan_tier=subscription.plan_tier,
         mrr=mrr,
         is_active=active
@@ -80,7 +88,7 @@ def create_subscription(subscription: SubscriptionCreate, user: UserCreate, sess
     # Refresh instances
     session.refresh(user_instance)
     session.refresh(subscription_instance)
-    return (user_instance, subscription_instance)
+    return subscription_instance
 
 
 @app.get("/api/subscriptions/")
